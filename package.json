@@ -1,0 +1,11 @@
+{
+  "name": "knightbot-vercel-session-generator",
+  "version": "1.0.1",
+  "private": true,
+  "type": "module",
+  "description": "Vercel-ready KnightBot WhatsApp pairing session generator.",
+  "dependencies": {
+    "@whiskeysockets/baileys": "^7.0.0-rc.9",
+    "pino": "^9.0.0"
+  }
+}
