@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>KnightBot • Session Generator</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#0e0d16;color:#eee;font-family:system-ui,Arial,sans-serif}
+.wrap{max-width:520px;margin:0 auto;padding:24px 16px 50px}
+.card{background:#181622;border:1px solid #2b2938;border-radius:18px;padding:20px;box-shadow:0 12px 40px #0005}
+h1{font-size:24px;margin:0 0 6px}.sub{color:#aaa;font-size:14px;margin-bottom:20px}
+label{display:block;font-size:13px;color:#bbb;margin:14px 0 7px}
+input{width:100%;padding:14px;border-radius:11px;border:1px solid #3a3748;background:#0d0c13;color:#fff;font-size:16px;outline:none}
+button{width:100%;padding:14px;border:0;border-radius:11px;background:#5d5be8;color:#fff;font-weight:700;font-size:15px;margin-top:14px}
+button:disabled{opacity:.5}
+.code{font-size:27px;letter-spacing:5px;text-align:center;background:#0a0910;padding:18px;border-radius:12px;margin-top:16px;font-weight:800}
+.status{margin-top:14px;padding:12px;border-radius:10px;background:#11101a;color:#bbb;font-size:14px}
+.session{display:none;margin-top:16px}
+.session textarea{width:100%;height:130px;background:#09080d;color:#c9f5d1;border:1px solid #333;border-radius:10px;padding:10px;font-size:11px;word-break:break-all}
+.small{font-size:12px;color:#888;margin-top:10px;line-height:1.5}
+.ok{color:#9be7a8}
+</style>
+</head>
+<body>
+<div class="wrap">
+<div class="card">
+<h1>🤖 KnightBot Session Generator</h1>
+<div class="sub">Generate a KnightBot! session using WhatsApp pairing code.</div>
+
+<label>WhatsApp number with country code</label>
+<input id="phone" inputmode="numeric" autocomplete="tel" placeholder="923001234567">
+<button id="start">Get Pairing Code</button>
+
+<div id="status" class="status">Ready.</div>
+<div id="code" class="code" style="display:none"></div>
+
+<div id="session" class="session">
+<label>Session ID</label>
+<textarea id="sid" readonly></textarea>
+<button id="copy">Copy Session ID</button>
+<div class="small">Keep this ID private. It represents your WhatsApp bot session.</div>
+</div>
+
+<div class="small">
+WhatsApp → Linked devices → Link a device → Link with phone number instead, then enter the code above.
+</div>
+</div>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+let controller=null;
+
+$('start').onclick=async()=>{
+  const phone=$('phone').value.trim();
+  if(!phone){ $('status').textContent='❌ Enter your WhatsApp number first.'; return; }
+
+  $('start').disabled=true;
+  $('code').style.display='none';
+  $('session').style.display='none';
+  $('status').textContent='Generating pairing code…';
+  controller=new AbortController();
+
+  try{
+    const r=await fetch('/api/pair',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({phone}),
+      signal:controller.signal
+    });
+
+    if(!r.ok){
+      let d={}; try{d=await r.json()}catch{}
+      throw new Error(d.error||'Request failed');
+    }
+
+    const reader=r.body.getReader();
+    const decoder=new TextDecoder();
+    let buffer='';
+
+    while(true){
+      const {value,done}=await reader.read();
+      if(done) break;
+      buffer += decoder.decode(value,{stream:true});
+
+      const parts=buffer.split('\\n\\n');
+      buffer=parts.pop();
+
+      for(const part of parts){
+        const em=(part.match(/^event:\\s*(.+)$/m)||[])[1];
+        const raw=(part.match(/^data:\\s*(.+)$/m)||[])[1];
+        if(!em||!raw) continue;
+        const d=JSON.parse(raw);
+
+        if(em==='code'){
+          $('code').textContent=d.code;
+          $('code').style.display='block';
+          $('status').textContent='Enter this code in WhatsApp. Waiting for connection…';
+        }
+        if(em==='connected'){
+          $('status').innerHTML='<span class="ok">✅ WhatsApp connected. Session generated.</span>';
+          $('sid').value=d.sessionId;
+          $('session').style.display='block';
+          $('start').disabled=false;
+        }
+        if(em==='error'){
+          $('status').textContent='❌ '+(d.error||'Pairing failed.');
+          $('start').disabled=false;
+        }
+      }
+    }
+  }catch(e){
+    if(e.name!=='AbortError'){
+      $('status').textContent='❌ '+(e.message||'Connection failed.');
+    }
+    $('start').disabled=false;
+  }
+};
+
+$('copy').onclick=async()=>{
+  await navigator.clipboard.writeText($('sid').value);
+  $('copy').textContent='Copied ✓';
+  setTimeout(()=>$('copy').textContent='Copy Session ID',1500);
+};
+</script>
+</body>
+</html>
